@@ -1,0 +1,96 @@
+version: "3.7"
+
+services:
+  dockerApp:
+    build:
+      args:
+        user: developer
+        uid: 1000
+      context: ./
+      dockerfile: Dockerfile
+    image: app
+    container_name: docker-laravel-container
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: laravel.test
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www
+      - ~/.ssh:/root/.ssh
+
+    networks:
+      - laravel
+
+  db:
+    image: mysql:8.0
+    container_name: mysql-container
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      #MYSQL_USER: docker        # not defined when you need to set password for root user
+      #MYSQL_PASSWORD: docker_root     # not defined when you need to set password for root user
+      # MYSQL_ALLOW_EMPTY_PASSWORD=yes  # set when you don't want set password for root user
+      MYSQL_ROOT_PASSWORD: root123
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+    networks:
+      - laravel
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-container
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./:/var/www
+      - ./docker-config/nginx:/etc/nginx/conf.d
+      - ./docker-config/nginx/ssl:/etc/nginx/conf.d/ssl
+      - ./docker-config/nginx/phpmyadmin.conf:/etc/nginx/conf.d/phpmyadmin.conf
+    networks:
+      - laravel
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmyadmin-container
+    ports:
+        - 8080:80
+    links:
+        - db
+    restart: unless-stopped
+    environment:
+        PMA_HOST: db
+        #PMA_USER: ${DB_USERNAME}
+        #PMA_PASSWORD: ${DB_PASSWORD}
+        PMA_PORT: 3306
+        PMA_ARBITRARY: 1
+    networks:
+        - laravel
+
+  # adminer:
+  #   image: adminer
+  #   container_name: adminer_container
+  #   restart: always
+  #   ports:
+  #     - 8080:8080
+  #   networks:
+  #     - laravel
+
+  redis:
+    image: "redis:alpine"
+    container_name: redis_container
+    restart: unless-stopped
+    volumes:
+        - ./docker-config/redis/data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - laravel      
+networks:
+  laravel:
+    driver: bridge
